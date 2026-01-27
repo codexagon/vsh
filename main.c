@@ -37,6 +37,14 @@ int main(int argc, char *argv[]) {
 		// handle 'exit' command
 		if (strcmp(args[0], "exit") == 0) {
 			exit(0);
+		} else if (strcmp(args[0], "cd") == 0) {
+			if (args[1] != NULL) {
+				int rc = chdir(args[1]);
+				if (rc == -1) {
+					fprintf(stderr, "cd: %s: %s\n", args[1], strerror(errno));
+				}
+			}
+			continue;
 		}
 
 		// handle general commands
