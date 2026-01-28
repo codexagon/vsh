@@ -1,9 +1,9 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <errno.h>
 
 #define TOKEN_DELIM " \t\n\r\a"
 
@@ -29,36 +29,91 @@ int main(int argc, char *argv[]) {
 			token = strtok(NULL, TOKEN_DELIM);
 		}
 
-		// show prompt again if no input given
-		if (args[0] == NULL) {
-			continue;
+		// split argument list based on pipe character
+		char *list[2][64] = {{NULL}, {NULL}};
+		i = 0;
+		int secondArg = 0, currentArg = 0, commandsCount = 1;
+
+		while (args[i] != NULL) {
+			if (strcmp(args[i], "|") == 0) {
+				secondArg++;
+				i++;
+				commandsCount++;
+				currentArg = 0;
+				continue;
+			}
+			if (commandsCount > 2) {
+				fprintf(stderr, "too many pipes\n");
+				break;
+			}
+
+			list[secondArg][currentArg] = args[i];
+			i++;
+			currentArg++;
 		}
 
-		// handle 'exit' command
-		if (strcmp(args[0], "exit") == 0) {
-			exit(0);
-		} else if (strcmp(args[0], "cd") == 0) {
-			if (args[1] != NULL) {
-				int rc = chdir(args[1]);
-				if (rc == -1) {
-					fprintf(stderr, "cd: %s: %s\n", args[1], strerror(errno));
-				}
-			}
-			continue;
+		int fd[2];
+		if (commandsCount > 1) {
+			pipe(fd);
 		}
 
-		// handle general commands
-		int pid = fork();
-		if (pid < 0) {
-			perror("fork failed\n");
-		} else if (pid == 0) {
-			if (execvp(args[0], args) < 0) {
-				if (errno == ENOENT) {
-					fprintf(stderr, "%s: command not found\n", args[0]);
+		for (int c = 0; c < commandsCount; c++) {
+			// re-prompt if no command or invalid pipe structure entered
+			if (list[c][0] == NULL) {
+				if (commandsCount > 1) {
+					fprintf(stderr, "unexpected token near |\n");
 				}
+				continue;
 			}
-			exit(1);
-		} else {
+
+			// handle 'exit' command
+			if (strcmp(list[c][0], "exit") == 0) {
+				exit(0);
+			} else if (strcmp(list[c][0], "cd") == 0) {
+				if (list[c][1] != NULL) {
+					int rc = chdir(list[c][1]);
+					if (rc == -1) {
+						fprintf(stderr, "cd: %s: %s\n", list[c][1], strerror(errno));
+					}
+				}
+				continue;
+			}
+
+			// handle general commands
+			int pid = fork();
+			if (pid < 0) {
+				perror("fork failed\n");
+			} else if (pid == 0) {
+				if (c == 0) {
+					if (commandsCount > 1) {
+						dup2(fd[1], STDOUT_FILENO);
+					}
+
+					close(fd[1]);
+					close(fd[0]);
+				} else if (c == 1) {
+					if (commandsCount > 1) {
+						dup2(fd[0], STDIN_FILENO);
+					}
+
+					close(fd[0]);
+					close(fd[1]);
+				}
+
+				if (execvp(list[c][0], list[c]) < 0) {
+					if (errno == ENOENT) {
+						fprintf(stderr, "%s: command not found\n", list[c][0]);
+					}
+				}
+				exit(1);
+			}
+		}
+		if (commandsCount > 1) {
+			close(fd[0]);
+			close(fd[1]);
+		}
+
+		for (int c = 0; c < commandsCount; c++) {
 			wait(NULL);
 		}
 	}
