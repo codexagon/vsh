@@ -11,10 +11,8 @@ int main(int argc, char *argv[]) {
 	while (1) {
 		char command[1024];
 
-		// print prompt
 		printf("vsh $ ");
 
-		// get command input
 		fgets(command, sizeof(command), stdin);
 
 		// tokenize the command by whitespace
@@ -66,7 +64,7 @@ int main(int argc, char *argv[]) {
 				continue;
 			}
 
-			// handle 'exit' command
+			// handle shell builtins
 			if (strcmp(list[c][0], "exit") == 0) {
 				exit(0);
 			} else if (strcmp(list[c][0], "cd") == 0) {
