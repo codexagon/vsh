@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include "command.h"
@@ -44,6 +45,16 @@ int main(int argc, char *argv[]) {
 				i++;
 				commandsCount++;
 				currentArg = 0;
+				continue;
+			} else if (strcmp(tokens[i], ">") == 0) {
+				int fd = open(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+				list[secondArg].output_fd = fd;
+				i += 2;
+				continue;
+			} else if (strcmp(tokens[i], ">>") == 0) {
+				int fd = open(tokens[i + 1], O_WRONLY | O_CREAT | O_APPEND, 0644);
+				list[secondArg].output_fd = fd;
+				i += 2;
 				continue;
 			}
 			if (commandsCount > 2) {
@@ -103,7 +114,10 @@ int main(int argc, char *argv[]) {
 					close(fd[1]);
 				}
 
-				fprintf(stderr, "cmd: %s, in: %i, out: %i\n", (list[c].args)[0], list[c].input_fd, list[c].output_fd);
+				// handle output redirection (>)
+				if ((list[c]).output_fd != STDOUT_FILENO) {
+					redirect_output(&(list[c]), list[c].output_fd);
+				}
 
 				if (execvp((list[c].args)[0], list[c].args) < 0) {
 					if (errno == ENOENT) {
