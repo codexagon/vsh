@@ -5,22 +5,24 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "command.h"
+
 #define TOKEN_DELIM " \t\n\r\a"
 
 int main(int argc, char *argv[]) {
 	while (1) {
-		char command[1024];
+		char input[1024];
 
 		printf("vsh $ ");
 
-		fgets(command, sizeof(command), stdin);
+		fgets(input, sizeof(input), stdin);
 
-		// tokenize the command by whitespace
-		char *args[64] = {NULL};
+		// tokenize the input by whitespace
+		char *tokens[64] = {NULL};
 		int i = 0;
-		char *token = strtok(command, TOKEN_DELIM);
+		char *token = strtok(input, TOKEN_DELIM);
 		while (token != NULL) {
-			args[i++] = token;
+			tokens[i++] = token;
 			if (i == 63) {
 				break;
 			}
@@ -28,12 +30,16 @@ int main(int argc, char *argv[]) {
 		}
 
 		// split argument list based on pipe character
-		char *list[2][64] = {{NULL}, {NULL}};
+		Command list[64] = {NULL};
 		i = 0;
 		int secondArg = 0, currentArg = 0, commandsCount = 1;
 
-		while (args[i] != NULL) {
-			if (strcmp(args[i], "|") == 0) {
+		for (int j = 0; j < 64; j++) {
+			init_command(&(list[j]));
+		}
+
+		while (tokens[i] != NULL) {
+			if (strcmp(tokens[i], "|") == 0) {
 				secondArg++;
 				i++;
 				commandsCount++;
@@ -45,7 +51,7 @@ int main(int argc, char *argv[]) {
 				break;
 			}
 
-			list[secondArg][currentArg] = args[i];
+			(list[secondArg].args)[currentArg] = tokens[i];
 			i++;
 			currentArg++;
 		}
@@ -57,7 +63,7 @@ int main(int argc, char *argv[]) {
 
 		for (int c = 0; c < commandsCount; c++) {
 			// re-prompt if no command or invalid pipe structure entered
-			if (list[c][0] == NULL) {
+			if ((list[c].args)[0] == NULL) {
 				if (commandsCount > 1) {
 					fprintf(stderr, "unexpected token near |\n");
 				}
@@ -65,13 +71,13 @@ int main(int argc, char *argv[]) {
 			}
 
 			// handle shell builtins
-			if (strcmp(list[c][0], "exit") == 0) {
+			if (strcmp((list[c].args)[0], "exit") == 0) {
 				exit(0);
-			} else if (strcmp(list[c][0], "cd") == 0) {
-				if (list[c][1] != NULL) {
-					int rc = chdir(list[c][1]);
+			} else if (strcmp((list[c]).args[0], "cd") == 0) {
+				if ((list[c].args)[1] != NULL) {
+					int rc = chdir((list[c].args)[1]);
 					if (rc == -1) {
-						fprintf(stderr, "cd: %s: %s\n", list[c][1], strerror(errno));
+						fprintf(stderr, "cd: %s: %s\n", (list[c].args)[1], strerror(errno));
 					}
 				}
 				continue;
@@ -84,23 +90,24 @@ int main(int argc, char *argv[]) {
 			} else if (pid == 0) {
 				if (c == 0) {
 					if (commandsCount > 1) {
-						dup2(fd[1], STDOUT_FILENO);
+						redirect_output(&(list[c]), fd[1]);
 					}
 
-					close(fd[1]);
+					// close(fd[1]);
 					close(fd[0]);
 				} else if (c == 1) {
 					if (commandsCount > 1) {
-						dup2(fd[0], STDIN_FILENO);
+						redirect_input(&(list[c]), fd[0]);
 					}
 
-					close(fd[0]);
 					close(fd[1]);
 				}
 
-				if (execvp(list[c][0], list[c]) < 0) {
+				fprintf(stderr, "cmd: %s, in: %i, out: %i\n", (list[c].args)[0], list[c].input_fd, list[c].output_fd);
+
+				if (execvp((list[c].args)[0], list[c].args) < 0) {
 					if (errno == ENOENT) {
-						fprintf(stderr, "%s: command not found\n", list[c][0]);
+						fprintf(stderr, "%s: command not found\n", (list[c].args)[0]);
 					}
 				}
 				exit(1);
