@@ -1,140 +1,42 @@
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <unistd.h>
 
-#include "command.h"
+#include "tokenizer.h"
 
-#define TOKEN_DELIM " \t\n\r\a"
+void get_input(char **str);
 
-int main(int argc, char *argv[]) {
+size_t input_capacity = 256;
+
+int main() {
+	char *input = malloc(input_capacity);
+	TokenList list;
+
 	while (1) {
-		char input[1024];
+		printf("\033[1;34mvsh\033[0m $ ");
+		get_input(&input);
+		printf("%s\n", input);
 
-		printf("vsh $ ");
+		// Tokenize
+		init_token_list(&list);
+		tokenize_input(&list, &input);
+	}
 
-		fgets(input, sizeof(input), stdin);
+	return 0;
+}
 
-		// tokenize the input by whitespace
-		char *tokens[64] = {NULL};
-		int i = 0;
-		char *token = strtok(input, TOKEN_DELIM);
-		while (token != NULL) {
-			tokens[i++] = token;
-			if (i == 63) {
-				break;
-			}
-			token = strtok(NULL, TOKEN_DELIM);
-		}
-
-		// split argument list based on pipe character
-		Command list[64] = {NULL};
-		i = 0;
-		int secondArg = 0, currentArg = 0, commandsCount = 1;
-
-		for (int j = 0; j < 64; j++) {
-			init_command(&(list[j]));
-		}
-
-		while (tokens[i] != NULL) {
-			if (strcmp(tokens[i], "|") == 0) {
-				secondArg++;
-				i++;
-				commandsCount++;
-				currentArg = 0;
-				continue;
-			} else if (strcmp(tokens[i], ">") == 0) {
-				int fd = open(tokens[i + 1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-				list[secondArg].output_fd = fd;
-				i += 2;
-				continue;
-			} else if (strcmp(tokens[i], ">>") == 0) {
-				int fd = open(tokens[i + 1], O_WRONLY | O_CREAT | O_APPEND, 0644);
-				list[secondArg].output_fd = fd;
-				i += 2;
-				continue;
-			}
-			if (commandsCount > 2) {
-				fprintf(stderr, "too many pipes\n");
-				break;
-			}
-
-			(list[secondArg].args)[currentArg] = tokens[i];
-			i++;
-			currentArg++;
-		}
-
-		int fd[2];
-		if (commandsCount > 1) {
-			pipe(fd);
-		}
-
-		for (int c = 0; c < commandsCount; c++) {
-			// re-prompt if no command or invalid pipe structure entered
-			if ((list[c].args)[0] == NULL) {
-				if (commandsCount > 1) {
-					fprintf(stderr, "unexpected token near |\n");
-				}
-				continue;
-			}
-
-			// handle shell builtins
-			if (strcmp((list[c].args)[0], "exit") == 0) {
-				exit(0);
-			} else if (strcmp((list[c]).args[0], "cd") == 0) {
-				if ((list[c].args)[1] != NULL) {
-					int rc = chdir((list[c].args)[1]);
-					if (rc == -1) {
-						fprintf(stderr, "cd: %s: %s\n", (list[c].args)[1], strerror(errno));
-					}
-				}
-				continue;
-			}
-
-			// handle general commands
-			int pid = fork();
-			if (pid < 0) {
-				perror("fork failed\n");
-			} else if (pid == 0) {
-				if (c == 0) {
-					if (commandsCount > 1) {
-						redirect_output(&(list[c]), fd[1]);
-					}
-
-					// close(fd[1]);
-					close(fd[0]);
-				} else if (c == 1) {
-					if (commandsCount > 1) {
-						redirect_input(&(list[c]), fd[0]);
-					}
-
-					close(fd[1]);
-				}
-
-				// handle output redirection (>)
-				if ((list[c]).output_fd != STDOUT_FILENO) {
-					redirect_output(&(list[c]), list[c].output_fd);
-				}
-
-				if (execvp((list[c].args)[0], list[c].args) < 0) {
-					if (errno == ENOENT) {
-						fprintf(stderr, "%s: command not found\n", (list[c].args)[0]);
-					}
-				}
+void get_input(char **str) {
+	int i = 0, c = 0;
+	while ((c = getchar()) != '\n' && c != EOF) {
+		if (i >= input_capacity) {
+			input_capacity *= 2;
+			*str = realloc(*str, input_capacity);
+			if (*str == NULL) {
+				fprintf(stderr, "Reallocation of input buffer failed.\n");
 				exit(1);
 			}
 		}
-		if (commandsCount > 1) {
-			close(fd[0]);
-			close(fd[1]);
-		}
-
-		for (int c = 0; c < commandsCount; c++) {
-			wait(NULL);
-		}
+		(*str)[i++] = c;
 	}
-	return 0;
+	(*str)[i] = '\0';
 }
