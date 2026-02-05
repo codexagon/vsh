@@ -31,6 +31,17 @@ void tokenize_input(TokenList *list, char **input) {
 			(list->count)++;
 			continue;
 		}
+		if (list->count >= list->capacity) {
+			list->capacity *= 2;
+			list->tokens = realloc(list->tokens, (list->capacity) * sizeof(Token));
+			if (list->tokens == NULL) {
+				fprintf(stderr, "Reallocation of token list failed.\n");
+				exit(1);
+			}
+			for (int j = list->count; j < list->capacity; j++) {
+				init_token(&((list->tokens)[j]));
+			}
+		}
 		if (content_pos >= token_content_capacity) {
 			token_content_capacity *= 2;
 			((list->tokens)[i]).content = realloc(((list->tokens)[i]).content, token_content_capacity);
