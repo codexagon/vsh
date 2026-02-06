@@ -11,15 +11,10 @@ void init_token_list(TokenList *list) {
 	if (list->tokens != NULL) {
 		free(list->tokens);
 	}
-	list->tokens = malloc((list->capacity) * sizeof(Token));
+	list->tokens = malloc((list->capacity) * sizeof(char *));
 	for (int i = 0; i < list->capacity; i++) {
-		init_token(&((list->tokens)[i]));
+		(list->tokens)[i] = malloc(token_content_capacity * sizeof(char) + 1);
 	}
-}
-
-void init_token(Token *token) {
-	token->content = malloc(token_content_capacity);
-	token->type = 0;
 }
 
 void tokenize_input(TokenList *list, char **input) {
@@ -33,23 +28,24 @@ void tokenize_input(TokenList *list, char **input) {
 		}
 		if (list->count >= list->capacity) {
 			list->capacity *= 2;
-			list->tokens = realloc(list->tokens, (list->capacity) * sizeof(Token));
+			list->tokens = realloc(list->tokens, (list->capacity) * sizeof(char *));
 			if (list->tokens == NULL) {
 				fprintf(stderr, "Reallocation of token list failed.\n");
 				exit(1);
 			}
 			for (int j = list->count; j < list->capacity; j++) {
-				init_token(&((list->tokens)[j]));
+				(list->tokens)[j] = malloc(token_content_capacity * sizeof(char) + 1);
 			}
 		}
 		if (content_pos >= token_content_capacity) {
 			token_content_capacity *= 2;
-			((list->tokens)[i]).content = realloc(((list->tokens)[i]).content, token_content_capacity);
-			if (((list->tokens)[i]).content == NULL) {
+			(list->tokens)[i] = realloc((list->tokens)[i], token_content_capacity);
+			if ((list->tokens)[i] == NULL) {
 				fprintf(stderr, "Reallocation of token content buffer failed.\n");
 				exit(1);
 			}
 		}
-		(((list->tokens)[(list->count) - 1]).content)[content_pos++] = (*input)[i];
+		((list->tokens)[(list->count) - 1])[content_pos++] = (*input)[i];
 	}
+	(list->tokens)[(list->count)] = NULL;
 }

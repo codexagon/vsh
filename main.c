@@ -48,20 +48,8 @@ void get_input(char **str) {
 	(*str)[i] = '\0';
 }
 
-void convert_to_array(TokenList *list, char ***args) {
-	for (int i = 0; i < list->count; i++) {
-		(*args)[i] = malloc(65 * sizeof(char));
-		strcpy((*args)[i], (list->tokens)[i].content);
-	}
-	(*args)[list->count] = NULL;
-}
-
 void execute(TokenList *list) {
-	char **args;
-	args = malloc((list->count) * sizeof(char *) + 1);
-	convert_to_array(list, &args);
-
-	if (is_builtin(args[0]) == 1) {
+	if (is_builtin((list->tokens)[0]) == 1) {
 		handle_builtins(list);
 		return;
 	}
@@ -72,9 +60,9 @@ void execute(TokenList *list) {
 		exit(2);
 		break;
 	case 0:
-		if (execvp(args[0], args) < 0) {
+		if (execvp((list->tokens)[0], list->tokens) < 0) {
 			if (errno == ENOENT) {
-				fprintf(stderr, "%s: command not found\n", args[0]);
+				fprintf(stderr, "%s: command not found\n", (list->tokens)[0]);
 			} else {
 				fprintf(stderr, "%i: %s\n", errno, strerror(errno));
 			}
