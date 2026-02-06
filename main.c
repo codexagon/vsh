@@ -79,6 +79,7 @@ void execute(TokenList *list) {
 				fprintf(stderr, "%i: %s\n", errno, strerror(errno));
 			}
 		}
+		exit(1); // calls only if execvp failed
 		break;
 	default:
 		wait(NULL);
